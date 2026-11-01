@@ -1,21 +1,20 @@
 {
   "name": "typed-regexp",
-  "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
-  "bugs": {
-    "url": "https://github.com/author/library/issues"
-  },
-  "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/author/library.git"
-  },
+  "version": "0.1.0",
+  "description": "Type-level state machine for mapping RegExp string literals to RegExpExecArray types. Infers capture group tuples and named group objects without build-step macros.",
+  "keywords": [
+    "capture-groups",
+    "regex",
+    "regexp",
+    "template-literal-types",
+    "type-level",
+    "typescript"
+  ],
   "files": [
     "dist"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
@@ -31,14 +30,9 @@
     "prepublishOnly": "vp run build",
     "prepare": "vp config"
   },
-  "dependencies": {
-    "regjsparser": "^0.13.2"
-  },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "bumpp": "^11.1.0",
     "typescript": "^7.0.2",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
