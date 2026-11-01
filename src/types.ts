@@ -1,190 +1,111 @@
-type Join<T extends unknown[]> = T extends []
-  ? ""
-  : T extends [infer H, ...infer R]
-    ? H extends string
-      ? R extends unknown[]
-        ? `${H}${Join<R>}`
-        : string
-      : H extends undefined
-        ? R extends []
-          ? undefined
-          : string
-        : string
-    : string;
+type Prettify<T> = { [K in keyof T]: T[K] } & {};
 
-type PushArr<T extends unknown[], V> = [...T, V];
-
-type ApplyQuantifierArr<T extends unknown[], Q extends string> = T extends [...infer H, infer L]
-  ? Q extends "*"
-    ? [...H, L | undefined]
-    : Q extends "+"
-      ? [...H, L]
-      : Q extends "?"
-        ? [...H, L | undefined]
-        : T
-  : T;
-
-type ParseCharClass<S extends string> = S extends `]${infer Rest}`
-  ? [string, Rest]
-  : S extends `\\${infer _C}${infer Rest}`
-    ? ParseCharClass<Rest>
-    : S extends `${infer _C}${infer Rest}`
-      ? ParseCharClass<Rest>
-      : never;
-
-type StackItem = {
+type Frame = {
+  self: [string] | [];
+  selfNamed: Record<string, unknown>;
   arr: unknown[];
   named: Record<string, unknown>;
+  alt: boolean;
 };
 
-type PushStack<S extends StackItem, V> = {
-  arr: PushArr<S["arr"], V>;
-  named: S["named"];
+type NewFrame<Self extends [string] | [] = [], Named extends Record<string, unknown> = {}> = {
+  self: Self;
+  selfNamed: Named;
+  arr: [];
+  named: {};
+  alt: false;
 };
 
-type LastStack<S extends StackItem[]> = S extends [...infer _, infer L extends StackItem]
-  ? L
+type Opt<T, B extends boolean> = {
+  [K in keyof T]: B extends true ? T[K] | undefined : T[K];
+};
+
+type CloseGroup<
+  Parent extends Frame,
+  Child extends Frame,
+  SelfOpt extends boolean,
+  InnerOpt extends boolean = SelfOpt extends true ? true : Child["alt"],
+> = {
+  self: Parent["self"];
+  selfNamed: Parent["selfNamed"];
+  arr: [...Parent["arr"], ...Opt<Child["self"], SelfOpt>, ...Opt<Child["arr"], InnerOpt>];
+  named: Parent["named"] & Opt<Child["selfNamed"], SelfOpt> & Opt<Child["named"], InnerOpt>;
+  alt: Parent["alt"];
+};
+
+type MarkAlt<S extends Frame[]> = S extends [...infer Init extends Frame[], infer Top extends Frame]
+  ? [
+      ...Init,
+      {
+        self: Top["self"];
+        selfNamed: Top["selfNamed"];
+        arr: Top["arr"];
+        named: Top["named"];
+        alt: true;
+      },
+    ]
   : never;
 
-type SetLastStack<S extends StackItem[], V extends StackItem> = S extends [
-  ...infer H extends StackItem[],
-  infer _L extends StackItem,
-]
-  ? [...H, V]
-  : S;
+type SkipClass<S extends string> = S extends `\\${infer _}${infer Rest}`
+  ? SkipClass<Rest>
+  : S extends `]${infer Rest}`
+    ? Rest
+    : S extends `${infer _}${infer Rest}`
+      ? SkipClass<Rest>
+      : never;
 
-export type InferRegExp<
-  S extends string,
-  Stack extends StackItem[] = [{ arr: []; named: {} }],
-> = S extends ""
-  ? { arr: Stack[0]["arr"]; named: Stack[0]["named"] }
-  : S extends `(?<${infer Name}>${infer Rest}`
-    ? InferRegExp<
-        Rest,
-        [
-          ...Stack,
-          {
-            arr: [];
-            named: { [K in Name]: string | undefined };
-          },
-        ]
-      >
-    : S extends `(?:${infer Rest}`
-      ? InferRegExp<Rest, [...Stack, { arr: []; named: {} }]>
-      : S extends `(?<=${infer Rest}`
-        ? InferRegExp<Rest, Stack>
-        : S extends `(?<!${infer Rest}`
-          ? InferRegExp<Rest, Stack>
-          : S extends `(?=${infer Rest}`
-            ? InferRegExp<Rest, Stack>
-            : S extends `(?!${infer Rest}`
-              ? InferRegExp<Rest, Stack>
+type IsOptionalAfter<S extends string> = S extends `?${string}` | `*${string}` | `{0,${string}`
+  ? true
+  : false;
+
+export type InferRegExp<S extends string, Stack extends Frame[] = [NewFrame]> = S extends ""
+  ? Stack extends [infer Root extends Frame]
+    ? {
+        arr: Opt<Root["arr"], Root["alt"]>;
+        named: Prettify<Opt<Root["named"], Root["alt"]>>;
+      }
+    : never
+  : S extends `\\${infer _}${infer Rest}`
+    ? InferRegExp<Rest, Stack>
+    : S extends `[${infer Rest}`
+      ? SkipClass<Rest> extends infer Next extends string
+        ? [Next] extends [never]
+          ? never
+          : InferRegExp<Next, Stack>
+        : never
+      : S extends `|${infer Rest}`
+        ? InferRegExp<Rest, MarkAlt<Stack>>
+        : S extends
+              | `(?:${infer Rest}`
+              | `(?=${infer Rest}`
+              | `(?!${infer Rest}`
+              | `(?<=${infer Rest}`
+              | `(?<!${infer Rest}`
+          ? InferRegExp<Rest, [...Stack, NewFrame]>
+          : S extends `(?<${infer Name}>${infer Rest}`
+            ? Name extends "" | `${string})${string}`
+              ? never
+              : InferRegExp<Rest, [...Stack, NewFrame<[string], Record<Name, string>>]>
+            : S extends `(?<${string}`
+              ? never
               : S extends `(${infer Rest}`
-                ? InferRegExp<Rest, [...Stack, { arr: []; named: {} }]>
+                ? InferRegExp<Rest, [...Stack, NewFrame<[string]>]>
                 : S extends `)${infer Rest}`
                   ? Stack extends [
-                      ...infer Init extends StackItem[],
-                      infer Parent extends StackItem,
-                      infer Current extends StackItem,
+                      ...infer Init extends Frame[],
+                      infer Parent extends Frame,
+                      infer Child extends Frame,
                     ]
-                    ? InferRegExp<
-                        Rest,
-                        [
-                          ...Init,
-                          {
-                            arr: [...Parent["arr"], Join<Current["arr"]>];
-                            named: Parent["named"] & Current["named"];
-                          },
-                        ]
-                      >
+                    ? InferRegExp<Rest, [...Init, CloseGroup<Parent, Child, IsOptionalAfter<Rest>>]>
                     : never
-                  : S extends `\\d${infer Rest}`
-                    ? InferRegExp<Rest, SetLastStack<Stack, PushStack<LastStack<Stack>, string>>>
-                    : S extends `\\w${infer Rest}`
-                      ? InferRegExp<Rest, SetLastStack<Stack, PushStack<LastStack<Stack>, string>>>
-                      : S extends `\\s${infer Rest}`
-                        ? InferRegExp<
-                            Rest,
-                            SetLastStack<Stack, PushStack<LastStack<Stack>, string>>
-                          >
-                        : S extends `\\.${infer Rest}`
-                          ? InferRegExp<
-                              Rest,
-                              SetLastStack<Stack, PushStack<LastStack<Stack>, string>>
-                            >
-                          : S extends `\\p{${infer _P}}${infer Rest}`
-                            ? InferRegExp<
-                                Rest,
-                                SetLastStack<Stack, PushStack<LastStack<Stack>, string>>
-                              >
-                            : S extends `\\${infer C}${infer Rest}`
-                              ? InferRegExp<
-                                  Rest,
-                                  SetLastStack<Stack, PushStack<LastStack<Stack>, C>>
-                                >
-                              : S extends `[${infer Rest}`
-                                ? ParseCharClass<Rest> extends [
-                                    infer V,
-                                    infer NextRest extends string,
-                                  ]
-                                  ? InferRegExp<
-                                      NextRest,
-                                      SetLastStack<Stack, PushStack<LastStack<Stack>, V>>
-                                    >
-                                  : never
-                                : S extends `*${infer Rest}`
-                                  ? InferRegExp<
-                                      Rest,
-                                      SetLastStack<
-                                        Stack,
-                                        {
-                                          arr: ApplyQuantifierArr<LastStack<Stack>["arr"], "*">;
-                                          named: LastStack<Stack>["named"];
-                                        }
-                                      >
-                                    >
-                                  : S extends `+${infer Rest}`
-                                    ? InferRegExp<
-                                        Rest,
-                                        SetLastStack<
-                                          Stack,
-                                          {
-                                            arr: ApplyQuantifierArr<LastStack<Stack>["arr"], "+">;
-                                            named: LastStack<Stack>["named"];
-                                          }
-                                        >
-                                      >
-                                    : S extends `?${infer Rest}`
-                                      ? InferRegExp<
-                                          Rest,
-                                          SetLastStack<
-                                            Stack,
-                                            {
-                                              arr: ApplyQuantifierArr<LastStack<Stack>["arr"], "?">;
-                                              named: LastStack<Stack>["named"];
-                                            }
-                                          >
-                                        >
-                                      : S extends `{${infer _N},${infer _M}}${infer Rest}`
-                                        ? InferRegExp<Rest, Stack>
-                                        : S extends `{${infer _N}}${infer Rest}`
-                                          ? InferRegExp<Rest, Stack>
-                                          : S extends `|${infer Rest}`
-                                            ? InferRegExp<Rest, Stack>
-                                            : S extends `${infer C}${infer Rest}`
-                                              ? InferRegExp<
-                                                  Rest,
-                                                  SetLastStack<
-                                                    Stack,
-                                                    PushStack<LastStack<Stack>, C>
-                                                  >
-                                                >
-                                              : never;
+                  : S extends `${infer _}${infer Rest}`
+                    ? InferRegExp<Rest, Stack>
+                    : never;
 
 export type TypedMatchArray<P extends string> =
   InferRegExp<P> extends {
     arr: infer A extends unknown[];
     named: infer N;
   }
-    ? [string, ...A] & { groups: N }
+    ? RegExpExecArray & [string, ...A] & { groups: N }
     : never;
