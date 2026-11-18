@@ -1,6 +1,6 @@
 import type { InferRegExp, TypedMatchArray } from "./types.js";
 
-export interface TypedRegExp<P extends string> extends RegExp {
+export interface TypedRegExp<P extends string> extends Omit<RegExp, "exec"> {
   exec(string: string): TypedMatchArray<P> | null;
 }
 

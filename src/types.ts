@@ -107,5 +107,5 @@ export type TypedMatchArray<P extends string> =
     arr: infer A extends unknown[];
     named: infer N;
   }
-    ? RegExpExecArray & [string, ...A] & { groups: N }
+    ? Omit<RegExpExecArray, "groups"> & [string, ...A] & { groups: N }
     : never;
