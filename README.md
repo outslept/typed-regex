@@ -54,4 +54,3 @@ At runtime, `typedRegex(pattern, flags)` simply returns `new RegExp(pattern, fla
 
 - **Literal strings only**: `pattern` must be a string literal (not a dynamic `string` or `RegExp` literal `/.../`).
 - **Recursion depth**: Very long patterns (~500+ characters) may hit TypeScript's tail-recursion instantiation limit (`TS2589`).
-- **Duplicate group names**: ES2025 duplicate named capture groups across alternatives (`(?<a>x)|(?<a>y)`) are intersected rather than unioned.
